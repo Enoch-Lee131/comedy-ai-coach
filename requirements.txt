@@ -76,3 +76,12 @@ tzdata==2025.1
 urllib3==2.3.0
 matplotlib
 imageio[ffmpeg]
+torchaudio
+openai==1.65.5
+openai-whisper==20240930
+librosa==0.10.2.post1
+python-dotenv==1.0.1
+streamlit==1.43.1
+matplotlib
+imageio[ffmpeg]
+torchaudio
