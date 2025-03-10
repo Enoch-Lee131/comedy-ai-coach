@@ -1,25 +1,41 @@
-import openai
 import os
-from dotenv import load_dotenv
+import openai
 import whisper
 import librosa
 import ssl
+import subprocess
+from dotenv import load_dotenv
+from pydub import AudioSegment
 
+# Load environment variables
 load_dotenv()
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Check if FFmpeg exists and set path
+FFMPEG_PATHS = ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/app/.apt/usr/bin/ffmpeg"]
+ffmpeg_path = next((path for path in FFMPEG_PATHS if os.path.exists(path)), None)
+
+if ffmpeg_path:
+    os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
+    AudioSegment.converter = ffmpeg_path
+else:
+    raise RuntimeError("FFmpeg is not installed or not found on Streamlit Cloud.")
 
 # Handle SSL certificate errors for Whisper
 ssl._create_default_https_context = ssl._create_unverified_context
 
-# Load Whisper model once
+# Load Whisper model once for performance
 whisper_model = whisper.load_model("base")
 
-# Joke feedback function (originally missing!)
-def joke_feedback(joke_text):
-    prompt = f"""
-    Analyze this joke for humor, structure, and clarity. Provide concise feedback and suggest improvements:
+# Get OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
+def joke_feedback(joke_text):
+    """Analyzes a joke using OpenAI and provides feedback on humor, structure, and clarity."""
+    prompt = f"""
+    You are a supportive comedy coach. Analyze this joke for humor, structure, and clarity.
+    Provide constructive feedback and specific suggestions for improvement.
+
+    Joke:
     "{joke_text}"
     """
 
@@ -34,13 +50,28 @@ def joke_feedback(joke_text):
 
     return response.choices[0].message.content.strip()
 
-# Audio transcription function
+
+def convert_audio(input_path, output_path="converted_audio.wav"):
+    """Convert any audio file to WAV format for Whisper compatibility."""
+    try:
+        # Debugging FFmpeg existence
+        ffmpeg_test = subprocess.run([AudioSegment.converter, "-version"], capture_output=True, text=True)
+        print("FFmpeg Version Output:", ffmpeg_test.stdout)
+
+        audio = AudioSegment.from_file(input_path)
+        audio.export(output_path, format="wav")
+        return output_path
+    except Exception as e:
+        raise RuntimeError(f"FFmpeg error: {str(e)}. Ensure FFmpeg is installed.")
+
 def transcribe_audio(audio_path):
-    result = whisper_model.transcribe(audio_path)
+    """Transcribe audio file using OpenAI Whisper."""
+    converted_audio = convert_audio(audio_path)  # Convert to WAV before transcription
+    result = whisper_model.transcribe(converted_audio)
     return result["text"]
 
-# Audio metrics analysis function
 def analyze_audio_metrics(audio_path):
+    """Extracts audio metrics such as duration, speaking rate, number of pauses, and loudness."""
     y, sr = librosa.load(audio_path)
     duration = librosa.get_duration(y=y, sr=sr)
     speaking_rate = len(y) / duration
