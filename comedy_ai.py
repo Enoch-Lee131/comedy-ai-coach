@@ -5,21 +5,58 @@ import librosa
 import ssl
 from dotenv import load_dotenv
 import torchaudio
+import numpy as np
 
-# Load environment variables
+# --- Monkey-patch Whisper's audio loader to use torchaudio instead of FFmpeg ---
+
+def load_audio_torchaudio(filename, sr=16000):
+    """
+    Load an audio file using torchaudio, resample to the target sampling rate,
+    convert to mono, and normalize to the [-1, 1] range.
+    """
+    # Load the audio file (supports MP3, WAV, etc.)
+    waveform, orig_sr = torchaudio.load(filename)
+    
+    # Resample if needed
+    if orig_sr != sr:
+        transform = torchaudio.transforms.Resample(orig_sr, sr)
+        waveform = transform(waveform)
+    
+    # Convert to mono by averaging channels if necessary
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0)
+    
+    audio = waveform.squeeze().numpy().astype(np.float32)
+    
+    # Normalize to [-1, 1]
+    max_val = np.abs(audio).max()
+    if max_val > 0:
+        audio = audio / max_val
+    return audio
+
+# Replace Whisper's load_audio with our torchaudio-based version.
+import whisper.audio
+whisper.audio.load_audio = load_audio_torchaudio
+
+# --- End monkey-patching ---
+
+# Load environment variables from .env file
 load_dotenv()
 
 # Handle SSL certificate errors for Whisper
 ssl._create_default_https_context = ssl._create_unverified_context
 
-# Load Whisper model once for performance
+# Load the Whisper model (this downloads the model if not present)
 whisper_model = whisper.load_model("base")
 
-# Get OpenAI API key
+# Set OpenAI API key from environment variable
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def joke_feedback(joke_text):
-    """Analyzes a joke using OpenAI and provides feedback on humor, structure, and clarity."""
+    """
+    Uses OpenAI's GPT-3.5-turbo to analyze a joke for humor, structure, and clarity.
+    Returns constructive feedback and suggestions.
+    """
     prompt = f"""
     You are a supportive comedy coach. Analyze this joke for humor, structure, and clarity.
     Provide constructive feedback and specific suggestions for improvement.
@@ -37,31 +74,19 @@ def joke_feedback(joke_text):
     )
     return response.choices[0].message.content.strip()
 
-def convert_audio_torchaudio(input_path, output_path="converted_audio.wav"):
-    """Converts an audio file (e.g. MP3) to WAV format using torchaudio."""
-    try:
-        waveform, sample_rate = torchaudio.load(input_path)
-        # Save as WAV format; torchaudio.save defaults to WAV if format isn't specified.
-        torchaudio.save(output_path, waveform, sample_rate, format="wav")
-        return output_path
-    except Exception as e:
-        raise RuntimeError(f"Audio conversion error: {str(e)}. Ensure the uploaded file is a valid audio file.")
-
 def transcribe_audio(audio_path):
-    """Transcribe an audio file using OpenAI Whisper."""
-    # If the file is MP3, convert it to WAV first
-    if audio_path.lower().endswith(".mp3"):
-        converted_audio_path = convert_audio_torchaudio(audio_path)
-    else:
-        converted_audio_path = audio_path
-    result = whisper_model.transcribe(converted_audio_path)
+    """
+    Transcribes the given audio file using the Whisper model.
+    The monkey-patched load_audio function will load the file using torchaudio.
+    """
+    result = whisper_model.transcribe(audio_path)
     return result["text"]
 
 def analyze_audio_metrics(audio_path):
-    """Extracts audio metrics such as duration, speaking rate, number of pauses, and loudness."""
-    # If the file is MP3, convert it to WAV before analysis
-    if audio_path.lower().endswith(".mp3"):
-        audio_path = convert_audio_torchaudio(audio_path)
+    """
+    Analyzes the audio file to extract basic metrics: duration, speaking rate,
+    number of pauses, and average loudness.
+    """
     y, sr = librosa.load(audio_path)
     duration = librosa.get_duration(y=y, sr=sr)
     speaking_rate = len(y) / duration
