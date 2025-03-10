@@ -3,7 +3,8 @@ import openai
 import whisper
 import librosa
 import ssl
-import wave
+import torchaudio
+import torchaudio.transforms as transforms
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -39,18 +40,19 @@ def joke_feedback(joke_text):
 
     return response.choices[0].message.content.strip()
 
-def is_wav_file(filepath):
-    """Check if a file is already in WAV format."""
+def convert_mp3_to_wav(input_path, output_path="converted_audio.wav"):
+    """Converts MP3 files to WAV format using torchaudio."""
     try:
-        with wave.open(filepath, 'rb') as file:
-            return True
-    except wave.Error:
-        return False
+        waveform, sample_rate = torchaudio.load(input_path)
+        torchaudio.save(output_path, waveform, sample_rate, format="wav")
+        return output_path
+    except Exception as e:
+        raise RuntimeError(f"Audio conversion error: {str(e)}. Ensure the uploaded file is a valid MP3.")
 
 def transcribe_audio(audio_path):
-    """Transcribe audio file using OpenAI Whisper without FFmpeg."""
-    if not is_wav_file(audio_path):
-        raise RuntimeError("Error: The uploaded file is not in WAV format. Please upload a WAV file.")
+    """Transcribe audio file using OpenAI Whisper."""
+    if audio_path.endswith(".mp3"):
+        audio_path = convert_mp3_to_wav(audio_path)  # Convert MP3 to WAV before transcription
 
     result = whisper_model.transcribe(audio_path)
     return result["text"]
