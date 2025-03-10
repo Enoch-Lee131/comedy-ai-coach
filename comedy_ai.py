@@ -3,22 +3,11 @@ import openai
 import whisper
 import librosa
 import ssl
-import subprocess
+import wave
 from dotenv import load_dotenv
-from pydub import AudioSegment
 
 # Load environment variables
 load_dotenv()
-
-# Check if FFmpeg exists and set path
-FFMPEG_PATHS = ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/app/.apt/usr/bin/ffmpeg"]
-ffmpeg_path = next((path for path in FFMPEG_PATHS if os.path.exists(path)), None)
-
-if ffmpeg_path:
-    os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
-    AudioSegment.converter = ffmpeg_path
-else:
-    raise RuntimeError("FFmpeg is not installed or not found on Streamlit Cloud.")
 
 # Handle SSL certificate errors for Whisper
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -50,24 +39,20 @@ def joke_feedback(joke_text):
 
     return response.choices[0].message.content.strip()
 
-
-def convert_audio(input_path, output_path="converted_audio.wav"):
-    """Convert any audio file to WAV format for Whisper compatibility."""
+def is_wav_file(filepath):
+    """Check if a file is already in WAV format."""
     try:
-        # Debugging FFmpeg existence
-        ffmpeg_test = subprocess.run([AudioSegment.converter, "-version"], capture_output=True, text=True)
-        print("FFmpeg Version Output:", ffmpeg_test.stdout)
-
-        audio = AudioSegment.from_file(input_path)
-        audio.export(output_path, format="wav")
-        return output_path
-    except Exception as e:
-        raise RuntimeError(f"FFmpeg error: {str(e)}. Ensure FFmpeg is installed.")
+        with wave.open(filepath, 'rb') as file:
+            return True
+    except wave.Error:
+        return False
 
 def transcribe_audio(audio_path):
-    """Transcribe audio file using OpenAI Whisper."""
-    converted_audio = convert_audio(audio_path)  # Convert to WAV before transcription
-    result = whisper_model.transcribe(converted_audio)
+    """Transcribe audio file using OpenAI Whisper without FFmpeg."""
+    if not is_wav_file(audio_path):
+        raise RuntimeError("Error: The uploaded file is not in WAV format. Please upload a WAV file.")
+
+    result = whisper_model.transcribe(audio_path)
     return result["text"]
 
 def analyze_audio_metrics(audio_path):
