@@ -1,28 +1,32 @@
-import openai
 import os
-from dotenv import load_dotenv
+import openai
 import whisper
 import librosa
 import ssl
+from dotenv import load_dotenv
+import torchaudio
 
+# Load environment variables
 load_dotenv()
-
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Handle SSL certificate errors for Whisper
 ssl._create_default_https_context = ssl._create_unverified_context
 
-# Load Whisper model once
+# Load Whisper model once for performance
 whisper_model = whisper.load_model("base")
 
-# Joke feedback function (originally missing!)
-def joke_feedback(joke_text):
-    prompt = f"""
-    Analyze this joke for humor, structure, and clarity. Provide concise feedback and suggest improvements:
+# Get OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
+def joke_feedback(joke_text):
+    """Analyzes a joke using OpenAI and provides feedback on humor, structure, and clarity."""
+    prompt = f"""
+    You are a supportive comedy coach. Analyze this joke for humor, structure, and clarity.
+    Provide constructive feedback and specific suggestions for improvement.
+
+    Joke:
     "{joke_text}"
     """
-
     response = openai.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
@@ -31,23 +35,39 @@ def joke_feedback(joke_text):
         ],
         temperature=0.7
     )
-
     return response.choices[0].message.content.strip()
 
-# Audio transcription function
+def convert_audio_torchaudio(input_path, output_path="converted_audio.wav"):
+    """Converts an audio file (e.g. MP3) to WAV format using torchaudio."""
+    try:
+        waveform, sample_rate = torchaudio.load(input_path)
+        # Save as WAV format; torchaudio.save defaults to WAV if format isn't specified.
+        torchaudio.save(output_path, waveform, sample_rate, format="wav")
+        return output_path
+    except Exception as e:
+        raise RuntimeError(f"Audio conversion error: {str(e)}. Ensure the uploaded file is a valid audio file.")
+
 def transcribe_audio(audio_path):
-    result = whisper_model.transcribe(audio_path)
+    """Transcribe an audio file using OpenAI Whisper."""
+    # If the file is MP3, convert it to WAV first
+    if audio_path.lower().endswith(".mp3"):
+        converted_audio_path = convert_audio_torchaudio(audio_path)
+    else:
+        converted_audio_path = audio_path
+    result = whisper_model.transcribe(converted_audio_path)
     return result["text"]
 
-# Audio metrics analysis function
 def analyze_audio_metrics(audio_path):
+    """Extracts audio metrics such as duration, speaking rate, number of pauses, and loudness."""
+    # If the file is MP3, convert it to WAV before analysis
+    if audio_path.lower().endswith(".mp3"):
+        audio_path = convert_audio_torchaudio(audio_path)
     y, sr = librosa.load(audio_path)
     duration = librosa.get_duration(y=y, sr=sr)
     speaking_rate = len(y) / duration
     pauses = librosa.effects.split(y, top_db=25)
     num_pauses = len(pauses) - 1
     avg_loudness = librosa.feature.rms(y=y).mean()
-    
     return {
         "duration_seconds": duration,
         "speaking_rate": speaking_rate,
