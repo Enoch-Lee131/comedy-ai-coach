@@ -10,6 +10,7 @@ import imageio_ffmpeg
 load_dotenv()
 
 ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+print("ffmpeg_path:", ffmpeg_path, "exists?", os.path.exists(ffmpeg_path))
 os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
 
 ssl._create_default_https_context = ssl._create_unverified_context
