@@ -5,17 +5,15 @@ import librosa
 import ssl
 from dotenv import load_dotenv
 import torchaudio
+import imageio_ffmpeg
 
-# Load environment variables
 load_dotenv()
 
-# Handle SSL certificate errors for Whisper
+ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
+
 ssl._create_default_https_context = ssl._create_unverified_context
-
-# Load Whisper model once for performance
 whisper_model = whisper.load_model("base")
-
-# Get OpenAI API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def joke_feedback(joke_text):
