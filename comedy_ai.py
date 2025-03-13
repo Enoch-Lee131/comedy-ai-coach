@@ -10,8 +10,14 @@ import imageio_ffmpeg
 load_dotenv()
 
 ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+# Prepend the directory containing ffmpeg to the PATH.
+os.environ["PATH"] = os.path.dirname(ffmpeg_path) + os.pathsep + os.environ.get("PATH", "")
+# Optionally, set an environment variable for ffmpeg.
+os.environ["FFMPEG_BINARY"] = ffmpeg_path
+
+# Debug print to confirm
 print("ffmpeg_path:", ffmpeg_path, "exists?", os.path.exists(ffmpeg_path))
-os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
+print("Updated PATH:", os.environ["PATH"])
 
 ssl._create_default_https_context = ssl._create_unverified_context
 whisper_model = whisper.load_model("base")
