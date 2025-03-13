@@ -21,12 +21,14 @@ elif option == "Audio":
     audio_file = st.file_uploader("Upload your audio file (MP3 or WAV)", type=["mp3", "wav"])
 
     if audio_file is not None:
-        # Save audio file temporarily
-        with open("temp_audio.mp3", "wb") as f:
+        # Use the original file extension for saving
+        file_extension = audio_file.name.split('.')[-1]
+        temp_audio_path = f"temp_audio.{file_extension}"
+        with open(temp_audio_path, "wb") as f:
             f.write(audio_file.getbuffer())
 
         with st.spinner("Transcribing your audio..."):
-            transcript = transcribe_audio("temp_audio.mp3")
+            transcript = transcribe_audio(temp_audio_path)
             st.markdown("### 🗣 Transcription:")
             st.write(transcript)
 
@@ -35,22 +37,21 @@ elif option == "Audio":
             st.markdown("## 📝 Joke Feedback:")
             st.write(feedback)
 
-            audio_metrics = analyze_audio_metrics("temp_audio.mp3")
+            # Analyze audio metrics and plot them
+            audio_metrics = analyze_audio_metrics(temp_audio_path)
             st.markdown("## 🎙 Delivery Analysis:")
             st.write(f"- Duration: {audio_metrics['duration_seconds']:.2f} seconds")
             st.write(f"- Speaking Rate: {audio_metrics['speaking_rate']:.2f} samples/sec")
             st.write(f"- Number of Pauses: {audio_metrics['num_pauses']}")
             st.write(f"- Average Loudness: {audio_metrics['avg_loudness']:.4f}")
 
-audio_metrics = analyze_audio_metrics("temp_audio.mp3")
+            st.markdown("### 🎙️ Delivery Metrics:")
 
-st.markdown("### 🎙️ Delivery Metrics:")
-
-fig, ax = plt.subplots(figsize=(6, 4))
-ax.barh(["Speaking Rate", "Pauses", "Avg Loudness"],
-        [audio_metrics["speaking_rate"], audio_metrics["num_pauses"], audio_metrics["avg_loudness"]],
-        color=['skyblue', 'orange', 'green'])
-
-ax.set_xlabel("Metrics")
-st.pyplot(fig)
-
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.barh(
+                ["Speaking Rate", "Pauses", "Avg Loudness"],
+                [audio_metrics["speaking_rate"], audio_metrics["num_pauses"], audio_metrics["avg_loudness"]],
+                color=['skyblue', 'orange', 'green']
+            )
+            ax.set_xlabel("Metrics")
+            st.pyplot(fig)
